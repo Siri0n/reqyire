@@ -15,5 +15,8 @@
   "bugs": {
     "url": "https://github.com/Siri0n/reqyire/issues"
   },
-  "homepage": "https://github.com/Siri0n/reqyire#readme"
+  "homepage": "https://github.com/Siri0n/reqyire#readme",
+  "dependencies": {
+    "builtin-modules": "^1.1.0"
+  }
 }
