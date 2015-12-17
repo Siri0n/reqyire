@@ -18,17 +18,17 @@ fs.writeFileSync("amazing.txt", "It works! (unless you have installed some modul
 
 If you have harmony proxies enabled (i.e. running Node with "--harmony-proxies" flag), things become even more awesome:
 
-'''js
+```js
 var reqyire = require("reqyire");
 var path = reqyire("ptah");
 path.posex.normazile("./and/it/../works/too");
-'''
+```
 
 Loaded modules are wrapped in a proxy which performs fuzzy search when you trying to get object property with misprinted name. If property value is an object or a function, it is also wrapped. Function call results are wrapped too.
 
 You can manually wrap arbitrary object or function using **reqyire.wrap**. Or **reqyire.warp**. Whatever...
 
-'''js
+```js
 var reqyire = require("reqyire");
 var obj = {
 	foo: "bar",
@@ -36,7 +36,7 @@ var obj = {
 };
 var wrappedObj = reqyire.wrop(obj);
 console.log(wrappedObj.baz); //It will print "foo"
-'''
+```
 ## Use cases
 
 Definetely, that module should be used in your current work, preferably on production. It makes you highly efficient, because you shouldn't waste your time on fixing typos anymore and write more SLoC instead.
