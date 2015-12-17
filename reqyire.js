@@ -1,5 +1,10 @@
-const DEFAULT_CACHE_SIZE = 5;
+const DEFAULT_CACHE_SIZE = 265;
+const PROXY_SUPPORT = (typeof Proxy != "undefined");
+
 var exec = require("child_process").execSync;
+var path = require("path");
+PROXY_SUPPORT && require("harmony-reflect");
+
 
 //Свой велосипед для мемоизации. Так захотелось.
 
@@ -91,21 +96,60 @@ function cachedSearch(arr){
 	return cachedFunction(fuzzySearch.bind(null, arr), DEFAULT_CACHE_SIZE);
 }
 
+function fuzzy(obj){
+	if(typeof obj != "object" && typeof obj != "function"){
+		return obj;
+	}
+	return new Proxy(obj, {
+		get: function(obj, key){
+			if(key in obj){
+				return obj[key];
+			}
+			var keys = [];
+			var p = obj;
+			do{
+				keys = keys.concat(Object.getOwnPropertyNames(p));
+			}while (p = Object.getPrototypeOf(p));
+			return fuzzy(obj[fuzzySearch(keys, key)]);
+		},
+		apply: function(obj, thisArg, argsList){
+			return fuzzy(obj.apply(thisArg, argsList));
+		}
+	})
+}
+
+function wrap(obj){
+	if(PROXY_SUPPORT){
+		return fuzzy(obj);
+	}else{
+		return obj;
+	}
+}
+
 var moduleSearch;
+var pathRegex = /^(\/|\.\/|\.\.\/)/;
 
 function reqyire(moduleName){
 	try{
 		return require(moduleName);
 	}catch(e){
-		if(!moduleSearch){
-			var localModules = Object.keys(JSON.parse(exec("npm ls -json") + "").dependencies || {});
-			var globalModules = Object.keys(JSON.parse(exec("npm ls -g -json") + "").dependencies || {});
-			var builtinModules = require("builtin-modules");
-			var modules = localModules.concat(globalModules).concat(builtinModules);
-			moduleSearch = cachedSearch(modules);
+		if(pathRegex.test(moduleName)){
+			throw Error("Sorry, fuzzy-searching in file system is too much pain in the ass for now. If you really want it, open an issue in my github repo.");
+		}else{
+			if(!moduleSearch){
+				var localModules = Object.keys(JSON.parse(exec("npm ls -json") + "").dependencies || {});
+				var globalModules = Object.keys(JSON.parse(exec("npm ls -g -json") + "").dependencies || {});
+				var builtinModules = require("builtin-modules");
+				var modules = localModules.concat(globalModules).concat(builtinModules);
+				moduleSearch = cachedSearch(modules);
+			}
+			return require(moduleSearch(moduleName));
 		}
-		return require(moduleSearch(moduleName));
 	}
 }
 
-module.exports = reqyire;
+if(PROXY_SUPPORT){
+	reqyire.wrap = fuzzy;
+}
+
+module.exports = wrap(reqyire);
