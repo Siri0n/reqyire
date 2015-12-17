@@ -1,6 +1,6 @@
 {
   "name": "reqyire",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "\"require\" for dyslexic",
   "main": "reqyire.js",
   "scripts": {
