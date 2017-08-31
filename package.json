@@ -18,6 +18,7 @@
   "homepage": "https://github.com/Siri0n/reqyire#readme",
   "dependencies": {
     "builtin-modules": "^1.1.0",
-    "harmony-reflect": "^1.4.2"
+    "harmony-reflect": "^1.4.2",
+    "stack-trace": "0.0.10"
   }
 }

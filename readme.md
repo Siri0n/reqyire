@@ -39,7 +39,7 @@ console.log(wrappedObj.baz); //It will print "foo"
 ```
 ## Use cases
 
-Definetely, that module should be used in your current work, preferably on production. It makes you highly efficient, because you shouldn't waste your time on fixing typos anymore and write more SLoC instead.
+Definetely, that module should be used in your current work, preferably on production. It makes you highly efficient, because you shouldn't waste your time on fixing typos anymore and could write more SLoC instead.
 
 ## Testing
 

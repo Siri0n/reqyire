@@ -1,10 +1,137 @@
 const DEFAULT_CACHE_SIZE = 265;
 const PROXY_SUPPORT = (typeof Proxy != "undefined");
 
-var exec = require("child_process").execSync;
 var path = require("path");
+var fs = require("fs");
+var stackTrace = require("stack-trace");
+
+var exec = require("child_process").execSync;
 PROXY_SUPPORT && require("harmony-reflect");
 
+var moduleSearch;
+var pathRegex = /^(\/|\.\/|\.\.\/)/;
+
+function reqyire(moduleName){
+	if(pathRegex.test(moduleName)){
+		return fileSearch(moduleName);
+	}else{
+		try{
+			return require(moduleName);
+		}catch(e){
+			if(!moduleSearch){
+				var localModules = Object.keys(JSON.parse(executeCommand("npm ls -json")).dependencies || {});
+				var globalModules = Object.keys(JSON.parse(executeCommand("npm ls -g -json")).dependencies || {});
+				var builtinModules = require("builtin-modules");
+				var modules = localModules.concat(globalModules).concat(builtinModules);
+				moduleSearch = cachedSearch(modules);
+			}
+			return require(moduleSearch(moduleName));
+		}
+	}
+}
+
+function wrap(obj){
+	if(PROXY_SUPPORT){
+		return fuzzy(obj);
+	}else{
+		return obj;
+	}
+}
+
+if(PROXY_SUPPORT){
+	reqyire.wrap = fuzzy;
+}
+
+module.exports = wrap(reqyire);
+
+
+function fileSearch(moduleName){
+	var callerName = stackTrace.get()[3].getFileName();
+	var callerFolder = path.dirname(callerName);
+	var resolvedName = path.resolve(callerFolder, moduleName);
+
+	try{
+		return require(resolvedName);
+	}catch(e){
+		var pathFragments = resolvedName.split(path.sep);
+		var i = pathFragments.length - 1;
+		var partialPath;
+		while(i > 0){
+			partialPath = pathFragments.slice(0, i).join(path.sep);
+			if(access(partialPath)){
+				break;
+			}else{
+				i--;
+			}
+		}
+		pathFragments = pathFragments.slice(i);
+		var fragment, names, correct;
+		while(pathFragments.length){
+			fragment = pathFragments.shift();
+			if(pathFragments.length){
+				names = getFolderNames(partialPath);
+			}else{
+				names = getFileNames(partialPath);
+			}
+			correct = fuzzySearch(names, fragment);
+			partialPath = path.join(partialPath, correct);
+		}
+		return require(partialPath);
+	}
+}
+
+function access(path){
+	try{
+		fs.accessSync(path);
+		return true;
+	}catch(e){
+		return false;
+	}
+}
+
+function getFileNames(dir){
+	return fs.readdirSync(dir).filter(function(name){
+		return fs.statSync(path.join(dir, name)).isFile();
+	});
+}
+
+function getFolderNames(dir){
+	return fs.readdirSync(dir).filter(function(name){
+		return fs.statSync(path.join(dir, name)).isDirectory();
+	});
+}
+
+function executeCommand(command){
+	var result;
+	try{
+		result = exec(command) + "";
+	}catch(e){
+		result = e.stdout + "";
+	}
+	return result;
+}
+
+function fuzzy(obj){
+	if(typeof obj != "object" && typeof obj != "function"){
+		return obj;
+	}
+	return new Proxy(obj, {
+		get: function(obj, key){
+			if(key in obj){
+				return obj[key];
+			}
+			var keys = [];
+			var p = obj;
+			do{
+				keys = keys.concat(Object.getOwnPropertyNames(p));
+			}while (p = Object.getPrototypeOf(p));
+			return fuzzy(obj[fuzzySearch(keys, key)]);
+		},
+		apply: function(obj, thisArg, argsList){
+			return fuzzy(obj.apply(thisArg, argsList));
+		}
+	})
+}
 
 //Свой велосипед для мемоизации. Так захотелось.
 
@@ -51,6 +178,22 @@ function cachedFunction(fn, size){
 
 //Слегка модифицированный алгоритм Вагнера-Фишера
 
+function cachedSearch(arr){
+	return cachedFunction(fuzzySearch.bind(null, arr), DEFAULT_CACHE_SIZE);
+}
+
+function fuzzySearch(arr, key){
+	var current, best = 0, bestResult = "";
+	for(var i = 0; i < arr.length; i++){
+		current = distanceLessThan(arr[i], key, best);
+		if(current > -1){
+			best = current;
+			bestResult = arr[i];
+		}
+	}
+	return bestResult;
+}
+
 function distanceLessThan(str1, str2, n){
 	var distances = [];
 	var distancesNext = [];
@@ -79,77 +222,3 @@ function distanceLessThan(str1, str2, n){
 	}
 	return distances[str1.length];
 }
-
-function fuzzySearch(arr, key){
-	var current, best = 0, bestResult = "";
-	for(var i = 0; i < arr.length; i++){
-		current = distanceLessThan(arr[i], key, best);
-		if(current > -1){
-			best = current;
-			bestResult = arr[i];
-		}
-	}
-	return bestResult;
-}
-
-function cachedSearch(arr){
-	return cachedFunction(fuzzySearch.bind(null, arr), DEFAULT_CACHE_SIZE);
-}
-
-function fuzzy(obj){
-	if(typeof obj != "object" && typeof obj != "function"){
-		return obj;
-	}
-	return new Proxy(obj, {
-		get: function(obj, key){
-			if(key in obj){
-				return obj[key];
-			}
-			var keys = [];
-			var p = obj;
-			do{
-				keys = keys.concat(Object.getOwnPropertyNames(p));
-			}while (p = Object.getPrototypeOf(p));
-			return fuzzy(obj[fuzzySearch(keys, key)]);
-		},
-		apply: function(obj, thisArg, argsList){
-			return fuzzy(obj.apply(thisArg, argsList));
-		}
-	})
-}
-
-function wrap(obj){
-	if(PROXY_SUPPORT){
-		return fuzzy(obj);
-	}else{
-		return obj;
-	}
-}
-
-var moduleSearch;
-var pathRegex = /^(\/|\.\/|\.\.\/)/;
-
-function reqyire(moduleName){
-	try{
-		return require(moduleName);
-	}catch(e){
-		if(pathRegex.test(moduleName)){
-			throw Error("Sorry, fuzzy-searching in file system is too much pain in the ass for now. If you really want it, open an issue in my github repo.");
-		}else{
-			if(!moduleSearch){
-				var localModules = Object.keys(JSON.parse(exec("npm ls -json") + "").dependencies || {});
-				var globalModules = Object.keys(JSON.parse(exec("npm ls -g -json") + "").dependencies || {});
-				var builtinModules = require("builtin-modules");
-				var modules = localModules.concat(globalModules).concat(builtinModules);
-				moduleSearch = cachedSearch(modules);
-			}
-			return require(moduleSearch(moduleName));
-		}
-	}
-}
-
-if(PROXY_SUPPORT){
-	reqyire.wrap = fuzzy;
-}
-
-module.exports = wrap(reqyire);
