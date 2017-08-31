@@ -104,7 +104,7 @@ function getFolderNames(dir){
 function executeCommand(command){
 	var result;
 	try{
-		result = exec(command) + "";
+		result = exec(command, {stdio: ["pipe", "pipe", "ignore"]}) + "";
 	}catch(e){
 		result = e.stdout + "";
 	}
